@@ -35,11 +35,26 @@ jobs:
       - name: Build Windows installer
         run: npm run build:win
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: [redacted] secrets.GITHUB_TOKEN }}
 
-      - name: Upload build artifacts
+      - name: Upload artifact (PR / branch)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         uses: actions/upload-artifact@v4
         with:
           name: Mineradio-Setup
-          path: dist/
-          retention-days: 30
+          path: dist/*-Setup.exe
+          retention-days: 7
+
+      - name: Create Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*-Setup.exe
+          generate_release_notes: false
+          body: |
+            ## Mineradio ${{ github.ref_name }}
+
+            从源码构建的 Windows 安装包。
+
+            ### 安装说明
+            下载 `Mineradio-*-Setup.exe` 并运行即可。

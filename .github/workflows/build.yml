@@ -35,7 +35,7 @@ jobs:
       - name: Build Windows installer
         run: npm run build:win
         env:
-          GH_TOKEN: [redacted] secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifact (PR / branch)
         if: ${{ !startsWith(github.ref, 'refs/tags/v') }}

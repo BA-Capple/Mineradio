@@ -1561,6 +1561,24 @@ function qualityCandidatesFrom(target, candidates) {
   if (start < 0) start = 0;
   return candidates.slice(start);
 }
+const GD_BR_MAP = [
+  { br: 999,  level: 'hires',    label: '24bit 无损' },
+  { br: 740,  level: 'lossless', label: '16bit 无损' },
+  { br: 320,  level: 'exhigh',   label: '320k MP3'  },
+  { br: 192,  level: 'standard', label: '192k MP3'  },
+  { br: 128,  level: 'standard', label: '128k MP3'  },
+];
+const GD_API_BASE = 'https://music-api.gdstudio.xyz/api.php';
+const GD_INTERNAL_SOURCES = ['joox', 'bilibili', 'tencent', 'kuwo', 'tidal', 'qobuz', 'apple', 'ytmusic', 'spotify'];
+const GD_PIC_CACHE = new Map();
+const GD_CACHE_MAX = 200;
+function gdCacheSet(key, val) {
+  if (GD_PIC_CACHE.size >= GD_CACHE_MAX) {
+    const first = GD_PIC_CACHE.keys().next().value;
+    if (first !== undefined) GD_PIC_CACHE.delete(first);
+  }
+  GD_PIC_CACHE.set(key, val);
+}
 function hasNeteaseSvip(loginInfo) {
   return !!(loginInfo && loginInfo.loggedIn && (loginInfo.vipLevel === 'svip' || loginInfo.isSvip || Number(loginInfo.vipType || 0) >= 10));
 }
@@ -2340,10 +2358,14 @@ async function qqGetJSON(targetUrl, params, opts) {
 }
 
 function audioProxyHeadersFor(audioUrl, range) {
-  const headers = { 'User-Agent': UA, Referer: 'https://music.163.com/' };
+  const headers = { 'User-Agent': UA };
   try {
     const host = new URL(audioUrl).hostname.toLowerCase();
-    if (host.includes('qq.com') || host.includes('qpic.cn')) headers.Referer = 'https://y.qq.com/';
+    if (host.includes('qq.com') || host.includes('qpic.cn')) {
+      headers.Referer = 'https://y.qq.com/';
+    } else if (host.includes('music.126.net') || host.includes('.163.com') || host.includes('126.net')) {
+      headers.Referer = 'https://music.163.com/';
+    }
   } catch (e) {}
   if (range) headers.Range = range;
   return headers;
@@ -2647,6 +2669,112 @@ async function handleQQSearch(keywords, limit) {
     seen.add(key);
     return !!song.name;
   });
+}
+
+// ---------- GD Studio API ----------
+async function gdApiFetch(params) {
+  const qs = Object.entries(params)
+    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v))
+    .join('&');
+  const url = GD_API_BASE + '?' + qs;
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': UA } }, 10000);
+  if (!res.ok) throw new Error('GD API HTTP ' + res.status);
+  return res.json();
+}
+function gdBrForLevel(level) {
+  level = normalizeQualityPreference(level);
+  for (const item of GD_BR_MAP) {
+    if (item.level === level) return item.br;
+  }
+  return 999;
+}
+async function gdFetchCover(picId, source) {
+  if (!picId) return '';
+  const cacheKey = (source || '') + ':' + picId;
+  if (GD_PIC_CACHE.has(cacheKey)) return GD_PIC_CACHE.get(cacheKey);
+  try {
+    const data = await gdApiFetch({ types: 'pic', source: source || GD_INTERNAL_SOURCES[0], id: picId, size: '500' });
+    const url = (data && data.url) || '';
+    gdCacheSet(cacheKey, url);
+    return url;
+  } catch (e) {
+    console.warn('[GDCover]', picId, e.message);
+    return '';
+  }
+}
+async function mapGDSearchItems(list, gdSource) {
+  const results = [];
+  for (const item of (list || [])) {
+    if (!item || !item.name) continue;
+    const picUrl = await gdFetchCover(item.pic_id, gdSource);
+    results.push({
+      provider: 'gdstudio',
+      source: 'gdstudio',
+      type: 'gdstudio',
+      gdInternalSource: gdSource,
+      id: String(item.id || item.url_id || ''),
+      name: item.name,
+      artist: Array.isArray(item.artist) ? item.artist.join(' / ') : String(item.artist || ''),
+      artists: Array.isArray(item.artist) ? item.artist.map(n => ({ name: n })) : [],
+      album: item.album || '',
+      cover: picUrl,
+      pic_id: item.pic_id,
+      lyric_id: item.lyric_id,
+      duration: Number(item.duration) || 0,
+    });
+  }
+  return results;
+}
+async function handleGDSearch(keywords, limit) {
+  const kw = String(keywords || '').trim();
+  if (!kw) return [];
+  console.log('[GDSearch]', kw, 'limit:', limit);
+  for (const source of GD_INTERNAL_SOURCES) {
+    try {
+      const list = await gdApiFetch({ types: 'search', source, name: kw, count: String(limit), pages: '1' });
+      if (Array.isArray(list) && list.length > 0) {
+        console.log('[GDSearch] hit on', source, ':', list.length);
+        const sliced = list.slice(0, Math.min(limit, 10));
+        return await mapGDSearchItems(sliced, source);
+      }
+    } catch (e) {
+      console.warn('[GDSearch]', source, 'failed:', e.message);
+    }
+  }
+  return [];
+}
+async function handleGDSongUrl(id, gdInternalSource, qualityPreference) {
+  const trackId = String(id || '').trim();
+  if (!trackId) return { provider: 'gdstudio', url: '', error: 'MISSING_ID' };
+  const br = gdBrForLevel(qualityPreference);
+  const sourcesToTry = gdInternalSource
+    ? [gdInternalSource, ...GD_INTERNAL_SOURCES.filter(s => s !== gdInternalSource)]
+    : GD_INTERNAL_SOURCES;
+  for (const source of sourcesToTry) {
+    try {
+      console.log('[GDSongUrl] trying', source, 'id:', trackId, 'br:', br);
+      const data = await gdApiFetch({ types: 'url', source, id: trackId, br: String(br) });
+      if (data && data.url) {
+        const resolvedBR = Number(data.br) || br;
+        let level = 'standard';
+        for (const item of GD_BR_MAP) {
+          if (resolvedBR >= item.br) { level = item.level; break; }
+        }
+        return {
+          provider: 'gdstudio',
+          url: data.url,
+          br: resolvedBR,
+          level,
+          playable: true,
+          trial: false,
+          gdResolvedSource: source,
+        };
+      }
+    } catch (e) {
+      console.warn('[GDSongUrl]', source, 'failed:', e.message);
+    }
+  }
+  return { provider: 'gdstudio', url: '', playable: false, error: 'NO_URL', restriction: { provider: 'gdstudio', category: 'url_unavailable', action: 'switch_source' } };
 }
 
 async function handleQQSongUrl(mid, mediaMid, qualityPreference) {
@@ -3450,6 +3578,33 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pn === '/api/gd/search') {
+    try {
+      const kw = url.searchParams.get('keywords') || '';
+      const limit = Math.max(4, Math.min(10, parseInt(url.searchParams.get('limit') || '6', 10) || 6));
+      const songs = await handleGDSearch(kw, limit);
+      sendJSON(res, { provider: 'gdstudio', songs });
+    } catch (err) {
+      console.error('[GDSearch]', err);
+      sendJSON(res, { provider: 'gdstudio', error: err.message, songs: [] }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/gd/song/url') {
+    try {
+      const id = url.searchParams.get('id') || '';
+      const gdSource = url.searchParams.get('source') || '';
+      const quality = url.searchParams.get('quality') || '';
+      const info = await handleGDSongUrl(id, gdSource, quality);
+      sendJSON(res, info);
+    } catch (err) {
+      console.error('[GDSongUrl]', err);
+      sendJSON(res, { provider: 'gdstudio', url: '', playable: false, error: err.message }, 500);
+    }
+    return;
+  }
+
   if (pn === '/api/qq/lyric') {
     try {
       const mid = url.searchParams.get('mid') || url.searchParams.get('songmid') || '';
@@ -4195,8 +4350,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log('======================================================');
-  console.log(' 粒子音乐可视化 v2  →  http://localhost:' + PORT);
-  console.log(' 登录态: ' + (userCookie ? '已登录(cookie已加载)' : '未登录'));
+  console.log(' Mineradio Server v2  ->  http://localhost:' + PORT);
+  console.log(' Login: ' + (userCookie ? 'OK (cookie loaded)' : 'none'));
   console.log('======================================================');
 });
 

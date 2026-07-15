@@ -196,6 +196,7 @@ body.empty-home-active.diy-mode #search-area:not(.has-results) #search-mode-tabs
 .tag-source{display:inline-flex;align-items:center;height:16px;padding:0 6px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.045);font-size:8.5px;font-weight:800;letter-spacing:.55px;line-height:1;flex-shrink:0}
 .tag-source.netease{color:#ffd8dd;border-color:rgba(217,91,103,.30);background:rgba(217,91,103,.075)}
 .tag-source.qq{color:#f0ffc8;border-color:rgba(191,214,107,.30);background:rgba(191,214,107,.075)}
+.tag-source.gdstudio{color:#b0f0ff;border-color:rgba(127,216,255,.30);background:rgba(127,216,255,.075)}
 .search-result.qq-source:hover{background:rgba(191,214,107,.052)}
 .search-result.netease-source:hover{background:rgba(217,91,103,.045)}
 .podcast-result-head{display:flex;align-items:center;gap:10px;padding:11px 13px 9px;border-bottom:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.025)}
@@ -1910,6 +1911,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
       <button id="search-mode-song" class="active" type="button" onclick="setSearchMode('song')" aria-selected="true">All</button>
       <button id="search-mode-netease" type="button" onclick="setSearchMode('netease')" aria-selected="false">NE</button>
       <button id="search-mode-qq" type="button" onclick="setSearchMode('qq')" aria-selected="false">QQ</button>
+      <button id="search-mode-gdstudio" type="button" onclick="setSearchMode('gdstudio')" aria-selected="false">GD</button>
       <button id="search-mode-podcast" type="button" onclick="setSearchMode('podcast')" aria-selected="false">Podcast</button>
     </div>
     <div id="search-results"></div>
@@ -17267,6 +17269,7 @@ function updateSearchModeTabs() {
   var songBtn = document.getElementById('search-mode-song');
   var neteaseBtn = document.getElementById('search-mode-netease');
   var qqBtn = document.getElementById('search-mode-qq');
+  var gdBtn = document.getElementById('search-mode-gdstudio');
   var podcastBtn = document.getElementById('search-mode-podcast');
   if (songBtn) {
     songBtn.classList.toggle('active', searchMode === 'song');
@@ -17280,6 +17283,10 @@ function updateSearchModeTabs() {
     qqBtn.classList.toggle('active', searchMode === 'qq');
     qqBtn.setAttribute('aria-selected', searchMode === 'qq' ? 'true' : 'false');
   }
+  if (gdBtn) {
+    gdBtn.classList.toggle('active', searchMode === 'gdstudio');
+    gdBtn.setAttribute('aria-selected', searchMode === 'gdstudio' ? 'true' : 'false');
+  }
   if (podcastBtn) {
     podcastBtn.classList.toggle('active', searchMode === 'podcast');
     podcastBtn.setAttribute('aria-selected', searchMode === 'podcast' ? 'true' : 'false');
@@ -17287,12 +17294,12 @@ function updateSearchModeTabs() {
   if ($input) {
     $input.placeholder = searchMode === 'podcast'
       ? '搜索播客、电台...'
-      : (searchMode === 'qq' ? '搜索 QQ 音乐...' : (searchMode === 'netease' ? '搜索网易云音乐...' : '搜索歌曲、歌手...'));
+      : (searchMode === 'gdstudio' ? '搜索 GD Studio...' : (searchMode === 'qq' ? '搜索 QQ 音乐...' : (searchMode === 'netease' ? '搜索网易云音乐...' : '搜索歌曲、歌手...')));
   }
   requestAnimationFrame(updateSearchPillGlassDisplacementMap);
 }
 function setSearchMode(mode) {
-  mode = (mode === 'podcast' || mode === 'netease' || mode === 'qq') ? mode : 'song';
+  mode = (mode === 'podcast' || mode === 'netease' || mode === 'qq' || mode === 'gdstudio') ? mode : 'song';
   if (searchMode === mode) return;
   searchMode = mode;
   updateSearchModeTabs();
@@ -17506,12 +17513,13 @@ document.addEventListener('click', function(e){
 updateSearchModeTabs();
 
 function songProviderKey(song) {
+  if (song && (song.provider === 'gdstudio' || song.source === 'gdstudio' || song.type === 'gdstudio')) return 'gdstudio';
   if (song && (song.provider === 'qq' || song.source === 'qq' || song.type === 'qq')) return 'qq';
   return 'netease';
 }
 function songSourceTagHtml(song) {
   var key = songProviderKey(song);
-  var label = key === 'qq' ? 'QQ' : 'NE';
+  var label = key === 'gdstudio' ? 'GD' : (key === 'qq' ? 'QQ' : 'NE');
   return '<span class="tag-source ' + key + '">' + label + '</span>';
 }
 function searchResultMetaText(song) {
@@ -17629,7 +17637,7 @@ function scoreSongSearchResult(song, q, sourceIndex) {
   score -= (sourceIndex || 0) * 0.75;
   return score;
 }
-function mergeSongSearchResults(neteaseSongs, qqSongs, limit, q) {
+function mergeSongSearchResults(neteaseSongs, qqSongs, gdSongs, limit, q) {
   var out = [];
   var seen = {};
   function push(song, sourceIndex) {
@@ -17642,26 +17650,34 @@ function mergeSongSearchResults(neteaseSongs, qqSongs, limit, q) {
   }
   (neteaseSongs || []).forEach(function(song, i){ push(song, i); });
   (qqSongs || []).forEach(function(song, i){ push(song, i); });
+  (gdSongs || []).forEach(function(song, i){ push(song, i + 999); });
   out.sort(function(a, b){ return (b._searchScore || 0) - (a._searchScore || 0); });
   return out.slice(0, limit);
 }
 async function fetchMusicSearchResults(q, mode) {
   if (mode === 'qq') {
     var qqOnly = await apiJson('/api/qq/search?keywords=' + encodeURIComponent(q) + '&limit=12');
-    return mergeSongSearchResults([], qqOnly.songs || [], 18, q);
+    return mergeSongSearchResults([], qqOnly.songs || [], [], 18, q);
   }
   if (mode === 'netease') {
     var neOnly = await apiJson('/api/search?keywords=' + encodeURIComponent(q) + '&limit=18');
-    return mergeSongSearchResults(neOnly.songs || [], [], 18, q);
+    return mergeSongSearchResults(neOnly.songs || [], [], [], 18, q);
+  }
+  if (mode === 'gdstudio') {
+    var gdOnly = await apiJson('/api/gd/search?keywords=' + encodeURIComponent(q) + '&limit=10');
+    return mergeSongSearchResults([], [], gdOnly.songs || [], 18, q);
   }
   var result = await Promise.allSettled([
     apiJson('/api/search?keywords=' + encodeURIComponent(q) + '&limit=14'),
-    apiJson('/api/qq/search?keywords=' + encodeURIComponent(q) + '&limit=12')
+    apiJson('/api/qq/search?keywords=' + encodeURIComponent(q) + '&limit=12'),
+    apiJson('/api/gd/search?keywords=' + encodeURIComponent(q) + '&limit=8')
   ]);
   var neteaseSongs = result[0].status === 'fulfilled' ? ((result[0].value && result[0].value.songs) || []) : [];
   var qqSongs = result[1].status === 'fulfilled' ? ((result[1].value && result[1].value.songs) || []) : [];
+  var gdSongs = result[2].status === 'fulfilled' ? ((result[2].value && result[2].value.songs) || []) : [];
   if (result[1].status === 'rejected') console.warn('QQ search failed:', result[1].reason);
-  return mergeSongSearchResults(neteaseSongs, qqSongs, 18, q);
+  if (result[2].status === 'rejected') console.warn('GD search failed:', result[2].reason);
+  return mergeSongSearchResults(neteaseSongs, qqSongs, gdSongs, 18, q);
 }
 function renderSongSearchResults(songs) {
   playlist = songs || [];
@@ -18133,10 +18149,14 @@ function playSearchResult(i) {
 var firstPlayDone = false;
 
 function playbackProviderLabel(song) {
-  return songProviderKey(song) === 'qq' ? 'QQ 音乐' : '网易云';
+  var key = songProviderKey(song);
+  if (key === 'gdstudio') return 'GD Studio';
+  return key === 'qq' ? 'QQ 音乐' : '网易云';
 }
 function playbackLoginProvider(song) {
-  return songProviderKey(song) === 'qq' ? 'qq' : 'netease';
+  var key = songProviderKey(song);
+  if (key === 'gdstudio') return 'netease';
+  return key === 'qq' ? 'qq' : 'netease';
 }
 function playbackRestrictionMessage(song, data) {
   data = data || {};
@@ -18206,7 +18226,11 @@ function showSourceFallbackNotice(title, body) {
 function normalizeMatchText(text) {
   return String(text || '').toLowerCase()
     .replace(/[（(【\[].*?[）)】\]]/g, '')
-    .replace(/[\s·・\-—_.,，。:：'"“”‘’/\\|]+/g, '');
+    .replace(/[\s·・\-—_.,，。:：'"“”‘’/\\|]+/g, '')
+    .replace(/[嘆鬱鄧麼氣關樂雲愛時間萬與為門說會來發見體學書問還過對風華畫話幾裏驚開離蘭靈馬們難憑確讓聲師識實勢雙歲臺頭無習係顯險現縣鄉寫謝陽樣藥葉醫憶應營擁優猶遊緣遠願運讚戰長這鎮爭證隻職紙誌種眾轉準總組鑽]/g, function(ch){
+      var map = {'嘆':'叹','鬱':'郁','鄧':'邓','麼':'么','氣':'气','關':'关','樂':'乐','雲':'云','愛':'爱','時':'时','間':'间','萬':'万','與':'与','為':'为','門':'门','說':'说','會':'会','來':'来','發':'发','見':'见','體':'体','學':'学','書':'书','問':'问','還':'还','過':'过','對':'对','風':'风','華':'华','畫':'画','話':'话','幾':'几','裏':'里','驚':'惊','開':'开','離':'离','蘭':'兰','靈':'灵','馬':'马','們':'们','難':'难','憑':'凭','確':'确','讓':'让','聲':'声','師':'师','識':'识','實':'实','勢':'势','雙':'双','歲':'岁','臺':'台','頭':'头','無':'无','習':'习','係':'系','顯':'显','險':'险','現':'现','縣':'县','鄉':'乡','寫':'写','謝':'谢','陽':'阳','樣':'样','藥':'药','葉':'叶','醫':'医','憶':'忆','應':'应','營':'营','擁':'拥','優':'优','猶':'犹','遊':'游','緣':'缘','遠':'远','願':'愿','運':'运','讚':'赞','戰':'战','長':'长','這':'这','鎮':'镇','爭':'争','證':'证','隻':'只','職':'职','紙':'纸','誌':'志','種':'种','眾':'众','轉':'转','準':'准','總':'总','組':'组','鑽':'钻'};
+      return map[ch] || ch;
+    });
 }
 function artistNameParts(song) {
   var parts = [];
@@ -18228,21 +18252,34 @@ function isSameTitleArtist(source, candidate) {
   if (!a.length || !b.length) return false;
   return a.some(function(name){ return b.indexOf(name) >= 0; });
 }
-function alternatePlaybackProvider(song) {
-  return songProviderKey(song) === 'qq' ? 'netease' : 'qq';
+function allOtherProviders(song) {
+  var key = songProviderKey(song);
+  var all = ['netease', 'qq', 'gdstudio'];
+  return all.filter(function(p){ return p !== key; });
 }
-async function searchAlternatePlatformSong(song) {
-  var target = alternatePlaybackProvider(song);
+async function searchAlternatePlatformSong(song, providers) {
+  providers = providers || allOtherProviders(song);
   var artist = artistNameParts(song)[0] || '';
   var query = [song.name || song.title || '', song.artist || artist].filter(Boolean).join(' ').trim();
   if (!query) return null;
-  var url = target === 'qq'
-    ? '/api/qq/search?keywords=' + encodeURIComponent(query) + '&limit=8'
-    : '/api/search?keywords=' + encodeURIComponent(query) + '&limit=12';
-  var data = await apiJson(url);
-  var list = data && (data.songs || data.result || []);
-  for (var i = 0; i < list.length; i++) {
-    if (isSameTitleArtist(song, list[i])) return cloneSong(list[i]);
+  for (var pi = 0; pi < providers.length; pi++) {
+    var target = providers[pi];
+    var url;
+    if (target === 'qq') url = '/api/qq/search?keywords=' + encodeURIComponent(query) + '&limit=8';
+    else if (target === 'gdstudio') url = '/api/gd/search?keywords=' + encodeURIComponent(query) + '&limit=8';
+    else url = '/api/search?keywords=' + encodeURIComponent(query) + '&limit=12';
+    try {
+      var data = await apiJson(url);
+      var list = data && (data.songs || data.result || []);
+      for (var i = 0; i < list.length; i++) {
+        if (isSameTitleArtist(song, list[i])) {
+          var found = cloneSong(list[i]);
+          return found;
+        }
+      }
+    } catch (e) {
+      console.warn('[FallbackSearch]', target, 'failed:', e.message);
+    }
   }
   return null;
 }
@@ -18277,30 +18314,51 @@ function skipFailedQueueItem(idx, token, message) {
 }
 async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
   opts = opts || {};
-  if (opts.fallbackDepth > 0) {
-    skipFailedQueueItem(idx, token, '自动换源后的版本仍不可播，正在播放下一首。');
+  var triedProviders = opts.triedProviders || [];
+  var currentProvider = songProviderKey(song);
+  console.log('[Fallback] enter provider=' + currentProvider + ' tried=[' + triedProviders.join(',') + '] song=' + (song.name || ''));
+  if (triedProviders.indexOf(currentProvider) >= 0) {
+    console.log('[Fallback] all tried, skip');
+    skipFailedQueueItem(idx, token, '所有音源均不可播，正在播放下一首。');
     return true;
   }
   if (!song || song.type === 'local' || song.type === 'podcast' || song.source === 'podcast') return false;
   var restriction = (data && data.restriction) || {};
   var category = (data && data.reason) || restriction.category || '';
+  var allOthers = allOtherProviders(song);
+  var remaining = allOthers.filter(function(p){
+    if (triedProviders.indexOf(p) >= 0) return false;
+    if (p === 'qq' && !qqLoginStatus.loggedIn) return false;
+    if (p === 'netease' && !loginStatus.loggedIn) return false;
+    return true;
+  });
+  console.log('[Fallback] allOthers=[' + allOthers.join(',') + '] remaining=[' + remaining.join(',') + '] qqLogged=' + qqLoginStatus.loggedIn + ' neLogged=' + loginStatus.loggedIn);
+  if (remaining.length === 0) {
+    if (category === 'login_required') {
+      console.log('[Fallback] no remaining and login_required, returning false');
+      return false;
+    }
+    skipFailedQueueItem(idx, token, '所有音源均不可播，正在播放下一首。');
+    return true;
+  }
+  var newTried = triedProviders.concat([currentProvider]);
   var fromLabel = playbackProviderLabel(song);
-  var targetLabel = alternatePlaybackProvider(song) === 'qq' ? 'QQ 音乐' : '网易云';
-  showSourceFallbackNotice('正在自动换源', fromLabel + ' 当前不可播，正在查找 ' + targetLabel + ' 的同名同歌手版本。');
+  showSourceFallbackNotice('正在自动换源', fromLabel + ' 当前不可播，正在尝试其他音源...');
   try {
-    var alternate = await searchAlternatePlatformSong(song);
+    var alternate = await searchAlternatePlatformSong(song, remaining);
     if (token !== trackSwitchToken) return true;
     if (!alternate) {
       if (category === 'login_required') return false;
-      skipFailedQueueItem(idx, token, '没有找到同名同歌手的 ' + targetLabel + ' 版本，正在播放下一首。');
+      skipFailedQueueItem(idx, token, '其他音源均未找到同名同歌手版本，正在播放下一首。');
       return true;
     }
-    alternate.autoFallbackFrom = songProviderKey(song);
+    var targetLabel = playbackProviderLabel(alternate);
+    alternate.autoFallbackFrom = currentProvider;
     playQueue[idx] = hydrateCustomCover(alternate);
     safeRenderQueuePanel('source-fallback', { scrollCurrent: miniQueueOpen });
     safeShelfRebuild('source-fallback');
     showSourceFallbackNotice('已自动切换音源', (song.name || '当前歌曲') + ' 已从 ' + fromLabel + ' 切到 ' + targetLabel + '。');
-    await playQueueAt(idx, { fallbackDepth: 1 });
+    await playQueueAt(idx, { triedProviders: newTried });
     return true;
   } catch (e) {
     if (token !== trackSwitchToken) return true;
@@ -18462,15 +18520,23 @@ async function playQueueAt(idx, opts) {
   try {
     markPlayPhase('source-url');
     var isQQPlayback = songProviderKey(song) === 'qq';
+    var isGDPlayback = songProviderKey(song) === 'gdstudio';
+    console.log('[PlayQueueAt] provider=' + songProviderKey(song) + ' idx=' + idx + ' depth=' + (opts.fallbackDepth || 0) + ' tried=[' + (opts.triedProviders||[]).join(',') + ']');
     var requestedQuality = normalizePlaybackQuality(opts.qualityOverride || playbackQuality);
-    if (!isQQPlayback && requestedQuality === 'jymaster' && !hasProviderSvip('netease', loginStatus)) requestedQuality = 'hires';
+    if (!isQQPlayback && !isGDPlayback && requestedQuality === 'jymaster' && !hasProviderSvip('netease', loginStatus)) requestedQuality = 'hires';
     if (isQQPlayback && qqPlaybackQualityCeiling && (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless')) {
       requestedQuality = qqPlaybackQualityCeiling;
     }
     var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
-    var data = isQQPlayback
-      ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-      : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+    var data;
+    if (isGDPlayback) {
+      var gdSourceParam = song.gdInternalSource ? '&source=' + encodeURIComponent(song.gdInternalSource) : '';
+      data = await apiJson('/api/gd/song/url?id=' + encodeURIComponent(song.id || '') + gdSourceParam + qualityParam);
+    } else if (isQQPlayback) {
+      data = await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam);
+    } else {
+      data = await apiJson('/api/song/url?id=' + song.id + qualityParam);
+    }
     if (token !== trackSwitchToken) return;
     if (!data.url) {
       if (isQQPlayback && await retryQQPlaybackWithCompatibleQuality(song, idx, token, opts, data, requestedQuality)) return;
@@ -18479,7 +18545,7 @@ async function playQueueAt(idx, opts) {
       return;
     }
     var resolvedQualityText = playbackResolvedQualityText(data);
-    if (!isQQPlayback && playbackQualityWasDowngraded(requestedQuality, data.level)) {
+    if (!isQQPlayback && !isGDPlayback && playbackQualityWasDowngraded(requestedQuality, data.level)) {
       showSourceFallbackNotice('网易云音质自动降级', '请求 ' + playbackQualityLabel(requestedQuality) + '，实际播放 ' + resolvedQualityText + '。');
     } else if (opts.qualitySwitch) {
       showSourceFallbackNotice('音质已切换', '实际播放: ' + resolvedQualityText + '。');

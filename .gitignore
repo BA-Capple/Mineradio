@@ -45,4 +45,6 @@ tmp/
 *.png.tmp
 verification/
 screenshots/
+
+# Reasonix agent workspace
 .reasonix/

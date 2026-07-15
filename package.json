@@ -61,14 +61,6 @@
       "include": "build/installer.nsh",
       "artifactName": "Mineradio-${version}-Setup.${ext}"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "BA-Capple",
-        "repo": "Mineradio"
-      }
-    ]
-  },
   "mineradio": {
     "update": {
       "provider": "github",

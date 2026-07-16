@@ -19089,6 +19089,11 @@ async function fetchLyric(songOrId, token) {
       var mid = song.mid || song.songmid || song.id || '';
       var qqId = song.qqId || (/^\d+$/.test(String(song.id || '')) ? song.id : '');
       endpoint = '/api/qq/lyric?mid=' + encodeURIComponent(mid) + '&id=' + encodeURIComponent(qqId);
+    } else if (provider === 'gdstudio') {
+      var songId = song ? song.id : songOrId;
+      var gdSource = (song && song.gdInternalSource) || '';
+      var lyricId = (song && song.lyric_id) || '';
+      endpoint = '/api/gd/lyric?id=' + encodeURIComponent(songId) + '&source=' + encodeURIComponent(gdSource) + '&lyric_id=' + encodeURIComponent(lyricId);
     } else {
       var songId = song ? song.id : songOrId;
       endpoint = '/api/lyric?id=' + encodeURIComponent(songId);

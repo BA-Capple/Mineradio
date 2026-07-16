@@ -1,64 +1,41 @@
 # 发布流程
 
-## v1.1.0 发布边界
+## v1.1.666 发布边界
 
-- `v1.1.0` 是纯净安装发布版，从当前 `resources/app` 可信源码重新构建。
-- 不复用旧 `dist/`、旧安装包、旧 `node_modules`、旧备份包或任何历史 packaged build。
-- 不生成 `v1.0.10 -> v1.1.0` 快速补丁。
-- 不把 `v1.1.0` 设置为旧版软件内更新通道的 latest；`v1.0.10` 用户需要手动下载新版安装包并纯净安装。
-- GitHub Release 需要明确提示：`v1.0.10` 及更早安装包有风险，请隔离旧 `.exe` 安装包，不要继续安装或转发。
-- 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
+- 在前版本 `v1.1.0` 纯净安装版基础上增量发布。
+- GD Studio 源歌词功能：在 server.js 新增 `/api/gd/lyric` 路由，前端 `fetchLyric` 新增 gdstudio 分支，支持多内部源自动兜底获取歌词。
+- 修复 package.json JSON 语法错误。
 
 ## 发布前检查
 
-- 确认 `package.json` 和 `package-lock.json` 版本号正确。
-- 确认 `mineradio.update.owner/repo` 指向正式仓库。
-- 确认 `.cookie`、`.qq-cookie`、`updates/`、`node_modules/`、旧 `dist/` 没有进入 git。
-- 确认 README/SECURITY/CHANGELOG/Release 正文包含 `v1.0.10` 旧安装包隔离说明。
-- 运行语法检查：`git diff --check`、`node --check server.js`、前端内联脚本解析。
-- 运行 Git 跟踪风险残留检查，确认没有跟踪 `.exe/.dll/.scr/.bat/.cmd/.ps1/.vbs/.jse/.wsf/.hta/.xlsm` 等可执行/脚本残留。
-- 从当前源码执行 `npm run build:win` 生成 Windows 安装包。
-- 对新生成的安装包和当前源码执行安全扫描。
-- 生成并记录新安装包 SHA256。
+- [x] `package.json` 版本号 `1.1.666` 正确。
+- [x] `mineradio.update.owner/repo` 指向 `BA-Capple/Mineradio`。
+- [x] `.cookie`、`.qq-cookie`、`updates/`、`node_modules/` 没有进入 git。
+- [x] 语法检查：`node --check server.js` 通过。
+- [x] Git 空白检查：`git diff --check` 未检测到空白错误。
+- [x] 从当前源码执行 `npm run build:win` 生成 Windows 安装包。
 
 ## GitHub Release
 
 Release tag：
 
 ```text
-v1.1.0
+v1.1.666
 ```
 
 Release 标题：
 
 ```text
-Mineradio v1.1.0 纯净安装版
+Mineradio v1.1.666
 ```
 
 建议上传资产：
 
-- `dist/Mineradio-1.1.0-Setup.exe`
-- `dist/Mineradio-1.1.0-Setup.exe.blockmap`（可选；本次不作为旧版软件内更新使用）
-- `dist/Mineradio-1.1.0-SHA256SUMS.txt`
-
-本次不要上传：
-
-- `latest.yml`
-- `v1.0.10 -> v1.1.0` 快速补丁
+- `dist/Mineradio-1.1.666-Setup.exe`
+- `dist/Mineradio-1.1.666-Setup.exe.blockmap`
+- `dist/latest.yml`
+- `dist/Mineradio-1.1.666-SHA256SUMS.txt`
 
 ## 更新检测
 
-应用会请求 GitHub Releases latest。为了避免 `v1.0.10` 旧客户端通过软件内更新直接拉到 `v1.1.0`，本次 GitHub Release 不应设为旧更新通道的 latest。
-
-本地验证更新链路时，可以用临时 manifest：
-
-```json
-{
-  "latestVersion": "1.1.0-test",
-  "release": {
-    "name": "Mineradio v1.1.0-test",
-    "downloadUrl": "http://127.0.0.1:3144/Mineradio-1.1.0-Setup.exe",
-    "notes": ["本地在线更新链路测试"]
-  }
-}
-```
+应用通过 GitHub Releases latest 检测更新。本次 Release 设为公开 latest，旧客户端可通过软件内更新获取。

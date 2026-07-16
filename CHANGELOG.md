@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.666
+
+- 新增 GD Studio 源歌词显示：GD Studio 搜索播放的歌曲不再回退到网易云歌词，直接通过 GD Studio API 获取歌词，支持多内部源（joox/tencent/kuwo 等）自动兜底。
+- 修复 package.json JSON 格式错误：`build` 对象缺少闭合括号导致 `npm start` 失败。
+- 更新 Electron / electron-builder 依赖，修复已知高风险构建依赖告警。
+
 ## v1.1.1
 
 - P0 installer safety fix: installation now defaults to the first available non-C drive from `D:\Mineradio` through `Z:\Mineradio`; it falls back to `C:\Mineradio` only when no D-Z drive exists.

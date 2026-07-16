@@ -60,7 +60,8 @@
       "installerHeader": "build/installerHeader.bmp",
       "include": "build/installer.nsh",
       "artifactName": "Mineradio-${version}-Setup.${ext}"
-    },
+    }
+  },
   "mineradio": {
     "update": {
       "provider": "github",

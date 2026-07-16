@@ -3605,6 +3605,41 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (pn === '/api/gd/lyric') {
+    try {
+      const id = url.searchParams.get('id') || '';
+      if (!id) { sendJSON(res, { provider: 'gdstudio', error: 'Missing song id', lyric: '' }, 400); return; }
+      const gdSource = url.searchParams.get('source') || '';
+      const lyricId = url.searchParams.get('lyric_id') || '';
+      let data = null;
+      function tryGD(types, source, tid) {
+        if (!tid) return null;
+        const params = { types, id: tid };
+        if (source) params.source = source;
+        return gdApiFetch(params);
+      }
+      // 优先：source + id
+      if (gdSource && !data) { try { data = await tryGD('lyric', gdSource, id); } catch (e) { data = null; } }
+      // source + lyric_id
+      if (gdSource && lyricId && lyricId !== id && !(data && data.lyric)) { try { data = await tryGD('lyric', gdSource, lyricId); } catch (e) { data = null; } }
+      // 无 source + id
+      if (!(data && data.lyric)) { try { data = await tryGD('lyric', '', id); } catch (e) { data = null; } }
+      // 无 source + lyric_id
+      if (lyricId && lyricId !== id && !(data && data.lyric)) { try { data = await tryGD('lyric', '', lyricId); } catch (e) { data = null; } }
+      console.log('[GDLyric]', 'id:', id, 'source:', gdSource || '(any)', 'lyric_id:', lyricId || '(none)', 'result:', (data && data.lyric ? (data.lyric.length + ' chars') : 'empty'));
+      sendJSON(res, {
+        provider: 'gdstudio',
+        lyric: (data && data.lyric) || '',
+        tlyric: (data && data.tlyric) || '',
+        yrc: '',
+      });
+    } catch (err) {
+      console.error('[GDLyric] error:', err);
+      sendJSON(res, { provider: 'gdstudio', error: err.message, lyric: '' }, 500);
+    }
+    return;
+  }
+
   if (pn === '/api/qq/lyric') {
     try {
       const mid = url.searchParams.get('mid') || url.searchParams.get('songmid') || '';

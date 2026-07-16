@@ -126,7 +126,7 @@ git diff --check                     # 提交前空白检查
    - `dist/latest.yml`
    - 需要的 `Mineradio-旧版本-x.y.z.json` 轻量补丁
 6. 0.9 系列补丁跳过；1.0.x 系列可按需生成跨小版本补丁。
-7. GitHub CLI 使用代理 `127.0.0.1:10808`（不要再用旧代理 `127.0.0.1:26001`）。
+7. GitHub CLI 考虑请求用户打开代理TUN模式后执行
 
 ## User Preferences
 
